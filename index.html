@@ -236,6 +236,8 @@ const plan = (() => {
 })();
 const KEY="paceclub-partner-marathon-sub400-20weeks-v3";
 let state=loadState(), currentId=null, screenshotData="", activeFilter="all";
+// Estado inicial explícito para que las vistas de running y fuerza se rendericen al abrir la app.
+let runningMode="active", strengthMode="active", selectedRunningWeek=1, selectedStrengthWeek=1;
 function loadState(){try{const v=JSON.parse(localStorage.getItem(KEY))||{};return {logs:{},adjustments:{},adjustmentsByIndex:{},functionalLogs:{},...v}}catch(e){return {logs:{},adjustments:{},adjustmentsByIndex:{},functionalLogs:{}}}}
 function saveState(){localStorage.setItem(KEY,JSON.stringify(state))}
 function paceSec(str){if(typeof str==="number")return str;let p=String(str||"").trim().split(":");if(p.length===2)return (+p[0])*60+(+p[1]);return Number(str)||0}
