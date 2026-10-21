@@ -389,7 +389,7 @@ function renderFunctional(){
    selectedStrengthWeek=strengthWeeks.find(w=>w.sessions.some(sess=>!logs[sess.id]?.done))?.week||20;
    weekSelect.value=selectedStrengthWeek;
  }
- const selected=weekSelect.value;
+ const selected=String(weekSelect.value || "all");
  selectedStrengthWeek=selected==="all"?"all":Number(selected);
  const visibleWeeks=strengthWeeks.filter(w=>(selected==="all"||w.week===Number(selected)) && (strengthMode==="history"?w.sessions.some(sess=>logs[sess.id]?.done):w.sessions.some(sess=>!logs[sess.id]?.done)));
  if(!visibleWeeks.length){
@@ -421,6 +421,7 @@ function setupWeekControls(){
  selectedRunningWeek=nextRun<0?20:plan[nextRun].week;
  runningSelect.value=String(selectedRunningWeek);
  runningSelect.addEventListener("change",()=>{selectedRunningWeek=runningSelect.value==="all"?"all":Number(runningSelect.value);render();});
+ runningSelect.addEventListener("input",()=>{selectedRunningWeek=runningSelect.value==="all"?"all":Number(runningSelect.value);render();});
  document.querySelectorAll("[data-running-mode]").forEach(btn=>btn.addEventListener("click",()=>{
    runningMode=btn.dataset.runningMode;
    document.querySelectorAll("[data-running-mode]").forEach(b=>b.classList.toggle("active",b===btn));
@@ -436,10 +437,11 @@ function setupWeekControls(){
  selectedStrengthWeek=strengthWeeks.find(w=>w.sessions.some(sess=>!state.functionalLogs?.[sess.id]?.done))?.week||20;
  strengthSelect.value=String(selectedStrengthWeek);
  strengthSelect.addEventListener("change",()=>{selectedStrengthWeek=strengthSelect.value==="all"?"all":Number(strengthSelect.value);renderFunctional();});
+ strengthSelect.addEventListener("input",()=>{selectedStrengthWeek=strengthSelect.value==="all"?"all":Number(strengthSelect.value);renderFunctional();});
  document.querySelectorAll("[data-strength-mode]").forEach(btn=>btn.addEventListener("click",()=>{
    strengthMode=btn.dataset.strengthMode;
    document.querySelectorAll("[data-strength-mode]").forEach(b=>b.classList.toggle("active",b===btn));
-   if(strengthMode==="history") strengthSelect.value="all";
+   if(strengthMode==="history") { selectedStrengthWeek="all"; strengthSelect.value="all"; }
    else {
      const next=strengthWeeks.find(w=>w.sessions.some(sess=>!state.functionalLogs?.[sess.id]?.done));
      selectedStrengthWeek=next?next.week:20;
@@ -459,31 +461,37 @@ document.querySelectorAll(".view-tab").forEach(btn=>btn.addEventListener("click"
  if(view==="functional")renderFunctional();
 }));
 function render(){
- renderCoach();
- renderFunctional();
- const done=Object.keys(state.logs).length, total=plan.length, km=Object.values(state.logs).reduce((s,l)=>s+(+l.distance||0),0);
- document.getElementById("doneStat").textContent=`${done} / ${total}`;
- document.getElementById("kmStat").textContent=km.toFixed(1);
- document.getElementById("progressPct").textContent=Math.round(done/total*100)+"%";
- document.getElementById("progressBar").style.width=(done/total*100)+"%";
- document.getElementById("progressLabel").textContent=done?`${done} sesiones completadas · sigue sumando.`:"Tu plan empieza aquí.";
- const next=plan.findIndex((p,i)=>!state.logs[i]);
- document.getElementById("nextText").textContent=next<0?"¡Plan completado! Revisa tu progreso y prepara el siguiente bloque.":`Siguiente: semana ${plan[next].week} · ${plan[next].title} · ${plan[next].km} km`;
- const filter=activeFilter;
- const root=document.getElementById("workouts");root.innerHTML="";
- const weekValue=document.getElementById("runningWeek").value || (selectedRunningWeek==="all"?"all":String(selectedRunningWeek||1));
- const weeks=[...new Set(plan.map(p=>p.week))].filter(week=>weekValue==="all"||week===Number(weekValue));
- weeks.forEach(week=>{
+ const root=document.getElementById("workouts");
+ try {
+  renderCoach();
+  const done=Object.keys(state.logs||{}).length, total=plan.length, km=Object.values(state.logs||{}).reduce((s,l)=>s+(+l.distance||0),0);
+  document.getElementById("doneStat").textContent=`${done} / ${total}`;
+  document.getElementById("kmStat").textContent=km.toFixed(1);
+  document.getElementById("progressPct").textContent=Math.round(done/total*100)+"%";
+  document.getElementById("progressBar").style.width=(done/total*100)+"%";
+  document.getElementById("progressLabel").textContent=done?`${done} sesiones completadas · sigue sumando.`:"Tu plan empieza aquí.";
+  const next=plan.findIndex((p,i)=>!state.logs[i]);
+  document.getElementById("nextText").textContent=next<0?"¡Plan completado! Revisa tu progreso y prepara el siguiente bloque.":`Siguiente: semana ${plan[next].week} · ${plan[next].title} · ${plan[next].km} km`;
+  root.innerHTML="";
+  const weekSelect=document.getElementById("runningWeek");
+  const weekValue=weekSelect ? String(weekSelect.value || "all") : "all";
+  const allPlanWeeks=[...new Set(plan.map(p=>Number(p.week)).filter(Number.isFinite))];
+  let weeks=allPlanWeeks.filter(week=>weekValue==="all"||week===Number(weekValue));
+  if(!weeks.length) weeks=allPlanWeeks;
+  let visible=0;
+  weeks.forEach(week=>{
    const indices=plan.map((p,i)=>({p,i})).filter(x=>x.p.week===week && (runningMode==="history"?!!state.logs[x.i]:!state.logs[x.i]));
    if(!indices.length)return;
+   visible+=indices.length;
    const allWeek=plan.map((p,i)=>({p,i})).filter(x=>x.p.week===week);
-   const planned=allWeek.reduce((s,x)=>s+(x.p.km||0),0);
-   const completed=allWeek.reduce((s,x)=>s+(+state.logs[x.i]?.distance||0),0);
+   const planned=allWeek.reduce((sum,x)=>sum+(x.p.km||0),0);
+   const completed=allWeek.reduce((sum,x)=>sum+(+state.logs[x.i]?.distance||0),0);
    const bucket=document.createElement("section");bucket.className="week-bucket";
    bucket.innerHTML=`<div class="week-bucket-head"><div><h3>Semana ${week}</h3><p>${allWeek.length} sesiones planificadas · ${allWeek.filter(x=>state.logs[x.i]).length}/${allWeek.length} completadas</p></div><div class="week-total"><strong>${completed.toFixed(1)} <span style="font-size:11px">/</span> ${planned.toFixed(1)} km</strong><span>Completados / planificados</span></div></div><div class="week-session-grid"></div>`;
    const grid=bucket.querySelector(".week-session-grid");
    indices.forEach(({p,i})=>{
-     const log=state.logs[i],blocks=adjustedBlocks(p,i);
+    try {
+     const log=state.logs[i], blocks=adjustedBlocks(p,i);
      const card=document.createElement("article");card.className="workout"+(log?" done":"");
      card.innerHTML=`<div class="workout-top"><div><div class="meta">${p.day}</div><h3 style="margin-top:5px">${p.title}</h3></div><span class="tag ${p.type==="recovery"?"recovery":log?"completed":""}">${log?"Completado":typeName(p.type)}</span></div>
      <div style="display:flex;align-items:baseline;justify-content:space-between"><div class="km">${p.km}<small> km planificados</small></div>${log?`<div style="text-align:right"><div style="font-weight:850;color:var(--lime)">${paceFmt(log.paceSec)}/km</div><div class="meta">ritmo real</div></div>`:""}</div>
@@ -491,13 +499,21 @@ function render(){
      ${log?`<div class="adapt-note"><b>Resultado guardado</b><br>${log.distance} km · ${log.duration} min · FC media ${log.avgHr||"—"} ppm<br><span style="color:var(--muted)">${log.adjustNote||"Sin ajuste de ritmo."}</span></div>${comparisonHTML(p,log,i)}`:""}
      <button class="btn ${log?"secondary":""}" data-log="${i}">${log?"Ver / editar resultado":p.type==="recovery"?"Registrar recuperación":"Registrar entreno"}</button>`;
      grid.appendChild(card);
+    } catch(cardError) { console.error('Error creando sesión running', cardError); }
    });
    root.appendChild(bucket);
- });
- if(!root.children.length)root.innerHTML=`<div class="empty-state">${runningMode==="history"?"Todavía no hay entrenamientos completados.":"¡Has terminado esta semana! Selecciona otra semana o consulta los completados."}</div>`;
- root.querySelectorAll("[data-log]").forEach(b=>b.addEventListener("click",()=>openModal(+b.dataset.log)));
- renderOverview();
- renderCharts();
+  });
+  if(!visible && runningMode==="active") {
+   // Safety fallback: if a stale filter/state combination hides every pending run, show the plan instead of a blank section.
+   root.innerHTML=plan.map((p,i)=>({p,i})).filter(x=>!state.logs[x.i]).map(({p,i})=>`<article class="workout"><div class="workout-top"><div><div class="meta">Semana ${p.week} · ${p.day}</div><h3>${p.title}</h3></div><span class="tag">${typeName(p.type)}</span></div><div class="km">${p.km}<small> km planificados</small></div><div class="blocks">${p.blocks.map(b=>`<div class="block"><span>${b[0]}</span><b>${b[1]}</b></div>`).join("")}</div><button class="btn" data-log="${i}">Registrar entreno</button></article>`).join("");
+  }
+  if(!visible && !root.children.length) root.innerHTML=`<div class="empty">${runningMode==="history"?"No hay sesiones completadas todavía. Cuando registres una carrera aparecerá aquí.":"No se han encontrado sesiones para este filtro. Selecciona Todas para ver el plan completo."}</div>`;
+  root.querySelectorAll("[data-log]").forEach(b=>b.addEventListener("click",()=>openModal(+b.dataset.log)));
+  renderOverview(); renderCharts();
+ } catch(err) {
+  console.error('PACE CLUB running render error', err);
+  root.innerHTML=`<div class="empty">No se han podido cargar las sesiones. Error: ${String(err.message||err)}. Recarga la página; si persiste, envía esta captura.</div>`;
+ }
 }
 function renderCharts(){
  const logs=Object.entries(state.logs).map(([i,l])=>({...l,index:+i})).sort((a,b)=>a.index-b.index);
@@ -651,6 +667,26 @@ document.getElementById("exportBtn").onclick=()=>{const blob=new Blob([JSON.stri
 document.getElementById("importBtn").onclick=()=>document.getElementById("importFile").click();
 document.getElementById("importFile").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.logs||!d.adjustments)throw Error();state={functionalLogs:{},...d};saveState();render();alert("Copia importada correctamente.")}catch(err){alert("El archivo no parece una copia válida de PACE CLUB.")}};r.readAsText(f)});
 document.getElementById("resetBtn").onclick=()=>{if(confirm("¿Seguro que quieres borrar los resultados y ajustes de este dispositivo? Exporta una copia antes si quieres conservarlos.")){state={logs:{},adjustments:{},adjustmentsByIndex:{},functionalLogs:{}};saveState();render()}};
+window.addEventListener("error",function(e){
+ const root=document.getElementById("workouts");
+ if(root && !root.children.length) root.innerHTML=`<div class="empty">Error al cargar los entrenamientos: ${String(e.message||"error de JavaScript")}</div>`;
+});
+
+// Delegación de eventos de respaldo para Safari móvil: pestañas y filtros siempre responden.
+document.addEventListener("click", function(e){
+ const strengthTab=e.target.closest("[data-strength-mode]");
+ if(strengthTab){
+   e.preventDefault(); strengthMode=strengthTab.dataset.strengthMode;
+   document.querySelectorAll("[data-strength-mode]").forEach(b=>b.classList.toggle("active",b===strengthTab));
+   const sel=document.getElementById("strengthWeek");
+   if(strengthMode==="history"){selectedStrengthWeek="all"; if(sel) sel.value="all";}
+   else {const next=strengthWeeks.find(w=>w.sessions.some(sess=>!state.functionalLogs?.[sess.id]?.done)); selectedStrengthWeek=next?next.week:20; if(sel)sel.value=String(selectedStrengthWeek);}
+   renderFunctional(); return;
+ }
+ const runTab=e.target.closest("[data-running-mode]");
+ if(runTab){e.preventDefault(); runningMode=runTab.dataset.runningMode; document.querySelectorAll("[data-running-mode]").forEach(b=>b.classList.toggle("active",b===runTab)); const sel=document.getElementById("runningWeek"); if(runningMode==="history"){selectedRunningWeek="all";if(sel)sel.value="all";} else {const next=plan.findIndex((p,i)=>!state.logs[i]);selectedRunningWeek=next<0?20:plan[next].week;if(sel)sel.value=String(selectedRunningWeek);} render();}
+});
+
 activeFilter="all";
 document.querySelectorAll(".filter").forEach(b=>b.classList.toggle("active",b.dataset.filter==="all"));
 if(document.readyState==="loading"){
