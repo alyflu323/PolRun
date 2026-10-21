@@ -109,7 +109,7 @@ body{font-size:14px;line-height:1.4}
   </div>
   <div class="plan-controls" id="runningControls">
     <div class="segmented"><button class="mini-tab active" data-running-mode="active">Por hacer</button><button class="mini-tab" data-running-mode="history">Completados</button></div>
-    <label class="compact-select">Semana <select id="runningWeek"></select></label>
+    <label class="compact-select">Semana <select id="runningWeek"><option value="all">Todas</option><option value="1">Semana 1</option><option value="2">Semana 2</option><option value="3">Semana 3</option><option value="4">Semana 4</option><option value="5">Semana 5</option><option value="6">Semana 6</option><option value="7">Semana 7</option><option value="8">Semana 8</option><option value="9">Semana 9</option><option value="10">Semana 10</option><option value="11">Semana 11</option><option value="12">Semana 12</option><option value="13">Semana 13</option><option value="14">Semana 14</option><option value="15">Semana 15</option><option value="16">Semana 16</option><option value="17">Semana 17</option><option value="18">Semana 18</option><option value="19">Semana 19</option><option value="20">Semana 20</option></select></label>
   </div>
   <div id="adaptMessage" class="adapt-note">⚡ <b>Smart pacing:</b> al registrar cada entreno, compara cada split con su objetivo, evalúa esfuerzo y pulsaciones y revisa las últimas sesiones. Ajusta poco a poco los futuros entrenos del mismo tipo y suaviza la próxima sesión de calidad si detecta carga alta.</div>
   <div id="coachPanel" class="card" style="margin-top:13px"><div class="eyebrow">Coach insight</div><h3 style="margin-top:8px">Tu entrenador está aprendiendo</h3><p>Registra tus sesiones para recibir recomendaciones basadas en ritmo, pulsaciones, esfuerzo y carga reciente.</p></div><div class="workouts" id="workouts" style="margin-top:13px"></div>
@@ -118,7 +118,7 @@ body{font-size:14px;line-height:1.4}
     <div class="section-head"><div><h2>Runner strength lab</h2><p>2 sesiones funcionales por semana · idealmente lunes y jueves · fuerza, estabilidad y economía de carrera</p></div></div>
     <div class="plan-controls" id="strengthControls">
       <div class="segmented"><button class="mini-tab active" data-strength-mode="active">Por hacer</button><button class="mini-tab" data-strength-mode="history">Completadas</button></div>
-      <label class="compact-select">Semana <select id="strengthWeek"></select></label>
+      <label class="compact-select">Semana <select id="strengthWeek"><option value="all">Todas</option><option value="1">Semana 1</option><option value="2">Semana 2</option><option value="3">Semana 3</option><option value="4">Semana 4</option><option value="5">Semana 5</option><option value="6">Semana 6</option><option value="7">Semana 7</option><option value="8">Semana 8</option><option value="9">Semana 9</option><option value="10">Semana 10</option><option value="11">Semana 11</option><option value="12">Semana 12</option><option value="13">Semana 13</option><option value="14">Semana 14</option><option value="15">Semana 15</option><option value="16">Semana 16</option><option value="17">Semana 17</option><option value="18">Semana 18</option><option value="19">Semana 19</option><option value="20">Semana 20</option></select></label>
     </div>
     <div class="adapt-note"><b>Cómo encajarlo:</b> deja al menos 24 h entre fuerza y la sesión de calidad o tirada larga cuando sea posible. Mantén 2–3 repeticiones en reserva; nunca busques agujetas intensas. En semanas de descarga y taper baja el volumen. Si aparece dolor, para el ejercicio.</div>
     <div class="stats functional-stats" style="margin:14px 0"><div class="stat"><span>Sesiones funcionales</span><strong id="strengthDone">0 / 40</strong></div><div class="stat"><span>Progreso</span><strong id="strengthPct">0%</strong></div></div>
@@ -416,7 +416,7 @@ function setupWeekControls(){
  const runningSelect=document.getElementById("runningWeek");
  const strengthSelect=document.getElementById("strengthWeek");
  const allWeeks=[...new Set(plan.map(p=>p.week))];
- runningSelect.innerHTML='<option value="all">Todas</option>'+allWeeks.map(w=>`<option value="${w}">Semana ${w}</option>`).join('');
+ if(runningSelect.options.length < 21) runningSelect.innerHTML='<option value="all">Todas</option>'+allWeeks.map(w=>`<option value="${w}">Semana ${w}</option>`).join('');
  const nextRun=plan.findIndex((p,i)=>!state.logs[i]);
  selectedRunningWeek=nextRun<0?20:plan[nextRun].week;
  runningSelect.value=String(selectedRunningWeek);
@@ -432,7 +432,7 @@ function setupWeekControls(){
    }
    render();
  }));
- strengthSelect.innerHTML='<option value="all">Todas</option>'+strengthWeeks.map(w=>`<option value="${w.week}">Semana ${w.week}</option>`).join('');
+ if(strengthSelect.options.length < 21) strengthSelect.innerHTML='<option value="all">Todas</option>'+strengthWeeks.map(w=>`<option value="${w.week}">Semana ${w.week}</option>`).join('');
  selectedStrengthWeek=strengthWeeks.find(w=>w.sessions.some(sess=>!state.functionalLogs?.[sess.id]?.done))?.week||20;
  strengthSelect.value=String(selectedStrengthWeek);
  strengthSelect.addEventListener("change",()=>{selectedStrengthWeek=strengthSelect.value==="all"?"all":Number(strengthSelect.value);renderFunctional();});
@@ -471,7 +471,7 @@ function render(){
  document.getElementById("nextText").textContent=next<0?"¡Plan completado! Revisa tu progreso y prepara el siguiente bloque.":`Siguiente: semana ${plan[next].week} · ${plan[next].title} · ${plan[next].km} km`;
  const filter=activeFilter;
  const root=document.getElementById("workouts");root.innerHTML="";
- const weekValue=document.getElementById("runningWeek")?.value||String(selectedRunningWeek||1);
+ const weekValue=document.getElementById("runningWeek").value || (selectedRunningWeek==="all"?"all":String(selectedRunningWeek||1));
  const weeks=[...new Set(plan.map(p=>p.week))].filter(week=>weekValue==="all"||week===Number(weekValue));
  weeks.forEach(week=>{
    const indices=plan.map((p,i)=>({p,i})).filter(x=>x.p.week===week && (runningMode==="history"?!!state.logs[x.i]:!state.logs[x.i]));
