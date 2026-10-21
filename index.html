@@ -106,11 +106,6 @@ body{font-size:14px;line-height:1.4}
   <section id="trainingView">
   <div class="section-head">
     <div><h2>Training calendar</h2><p>20 semanas · 3 sesiones por semana · objetivo maratón sub 4:00</p></div>
-    <div class="filters">
-      <button class="filter active" data-filter="all">Todos</button>
-      <button class="filter" data-filter="pending">Pendientes</button>
-      <button class="filter" data-filter="done">Completados</button>
-    </div>
   </div>
   <div class="plan-controls" id="runningControls">
     <div class="segmented"><button class="mini-tab active" data-running-mode="active">Por hacer</button><button class="mini-tab" data-running-mode="history">Completados</button></div>
@@ -398,9 +393,9 @@ function renderFunctional(){
    selectedStrengthWeek=firstPending; weekSelect.value=selectedStrengthWeek;
  }
  selectedStrengthWeek=+weekSelect.value;
- const weeksToShow=strengthMode==="history"
-   ? strengthWeeks.filter(w=>w.sessions.some(sess=>logs[sess.id]?.done))
-   : strengthWeeks.filter(w=>w.week===selectedStrengthWeek && w.sessions.some(sess=>!logs[sess.id]?.done));
+ const weeksToShow=strengthWeeks.filter(w=>w.week===selectedStrengthWeek && (strengthMode==="history"
+   ? w.sessions.some(sess=>logs[sess.id]?.done)
+   : w.sessions.some(sess=>!logs[sess.id]?.done)));
  if(!weeksToShow.length){
    root.innerHTML=`<div class="empty-state">${strengthMode==="history"?"Todavía no hay sesiones funcionales completadas. Cuando marques una, aparecerá aquí.":"¡Semana completada! Elige otra semana en el selector para consultar el plan."}</div>`;
    return;
@@ -417,8 +412,11 @@ function renderFunctional(){
    state.functionalLogs[id].date=state.functionalLogs[id].done?new Date().toISOString().slice(0,10):null;
    saveState();
    if(strengthMode==="active"){
-     const next=strengthWeeks.find(w=>w.sessions.some(sess=>!state.functionalLogs[sess.id]?.done));
-     if(next){selectedStrengthWeek=next.week;document.getElementById("strengthWeek").value=next.week;}
+     const current=strengthWeeks.find(w=>w.week===selectedStrengthWeek);
+     if(current && current.sessions.every(sess=>state.functionalLogs[sess.id]?.done)){
+       const next=strengthWeeks.find(w=>w.sessions.some(sess=>!state.functionalLogs[sess.id]?.done));
+       if(next){selectedStrengthWeek=next.week;document.getElementById("strengthWeek").value=next.week;}
+     }
    }
    renderFunctional();
  }));
@@ -472,19 +470,13 @@ function render(){
  document.getElementById("progressBar").style.width=(done/total*100)+"%";
  document.getElementById("progressLabel").textContent=done?`${done} sesiones completadas · sigue sumando.`:"Tu plan empieza aquí.";
  const next=plan.findIndex((p,i)=>!state.logs[i]);
- if(runningMode==="active" && next>=0){
-   selectedRunningWeek=plan[next].week;
-   const runningSelect=document.getElementById("runningWeek");
-   if(runningSelect)runningSelect.value=selectedRunningWeek;
- }
  document.getElementById("nextText").textContent=next<0?"¡Plan completado! Revisa tu progreso y prepara el siguiente bloque.":`Siguiente: semana ${plan[next].week} · ${plan[next].title} · ${plan[next].km} km`;
  const filter=activeFilter;
  const root=document.getElementById("workouts");root.innerHTML="";
- const weeks=[...new Set(plan.map(p=>p.week))].filter(week=>runningMode==="history"
-   ? plan.some((p,i)=>p.week===week&&!!state.logs[i])
-   : week===+(document.getElementById("runningWeek")?.value||selectedRunningWeek));
+ const chosenWeek=+(document.getElementById("runningWeek")?.value||selectedRunningWeek||1);
+ const weeks=[...new Set(plan.map(p=>p.week))].filter(week=>week===chosenWeek);
  weeks.forEach(week=>{
-   const indices=plan.map((p,i)=>({p,i})).filter(x=>x.p.week===week && (runningMode==="history"?!!state.logs[x.i]:!state.logs[x.i]) && !(filter==="done"&&!state.logs[x.i]) && !(filter==="pending"&&state.logs[x.i]));
+   const indices=plan.map((p,i)=>({p,i})).filter(x=>x.p.week===week && (runningMode==="history"?!!state.logs[x.i]:!state.logs[x.i]));
    if(!indices.length)return;
    const allWeek=plan.map((p,i)=>({p,i})).filter(x=>x.p.week===week);
    const planned=allWeek.reduce((s,x)=>s+(x.p.km||0),0);
@@ -541,8 +533,7 @@ function closeModal(){document.getElementById("modalBackdrop").classList.remove(
 document.getElementById("closeModal").onclick=closeModal;document.getElementById("cancelModal").onclick=closeModal;
 document.getElementById("modalBackdrop").addEventListener("click",e=>{if(e.target.id==="modalBackdrop")closeModal()});
 document.querySelectorAll(".filter").forEach(b=>b.addEventListener("click",()=>{
- activeFilter=b.dataset.filter||"all";
- document.querySelectorAll(".filter").forEach(x=>{x.classList.toggle("active",x===b)});
+ activeFilter="all";
  render();
 }));
 document.getElementById("splits").addEventListener("input",()=>{
