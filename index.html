@@ -48,7 +48,7 @@ body{font-size:14px;line-height:1.4}
 .mini-tab{border:0;background:transparent;color:var(--muted);padding:7px 11px;border-radius:8px;font-size:11px;font-weight:750}
 .mini-tab.active{background:var(--lime);color:#11170d}
 .compact-select{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;font-weight:700}
-.compact-select select{background:#101511;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:7px 10px;min-width:100px;font-size:12px}
+.compact-select select{appearance:auto;-webkit-appearance:menulist;background:#101511;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:7px 10px;min-width:120px;font-size:12px;min-height:38px}
 .empty-state{padding:22px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:13px;font-size:12px}
 @media(max-width:700px){
  .app{padding:12px 10px 32px}
@@ -384,23 +384,19 @@ function renderFunctional(){
  document.getElementById("strengthDone").textContent=`${done} / 40`;
  document.getElementById("strengthPct").textContent=Math.round(done/40*100)+"%";
  const weekSelect=document.getElementById("strengthWeek");
- const firstPending=strengthWeeks.find(w=>w.sessions.some(sess=>!logs[sess.id]?.done))?.week||20;
  if(!weekSelect.options.length){
-   weekSelect.innerHTML=strengthWeeks.map(w=>`<option value="${w.week}">Semana ${w.week}</option>`).join("");
-   selectedStrengthWeek=firstPending; weekSelect.value=selectedStrengthWeek;
+   weekSelect.innerHTML='<option value="all">Todas</option>'+strengthWeeks.map(w=>`<option value="${w.week}">Semana ${w.week}</option>`).join('');
+   selectedStrengthWeek=strengthWeeks.find(w=>w.sessions.some(sess=>!logs[sess.id]?.done))?.week||20;
+   weekSelect.value=selectedStrengthWeek;
  }
- if(strengthMode==="active" && !strengthWeeks.find(w=>w.week===+weekSelect.value)?.sessions.some(sess=>!logs[sess.id]?.done)){
-   selectedStrengthWeek=firstPending; weekSelect.value=selectedStrengthWeek;
- }
- selectedStrengthWeek=+weekSelect.value;
- const weeksToShow=strengthWeeks.filter(w=>w.week===selectedStrengthWeek && (strengthMode==="history"
-   ? w.sessions.some(sess=>logs[sess.id]?.done)
-   : w.sessions.some(sess=>!logs[sess.id]?.done)));
- if(!weeksToShow.length){
-   root.innerHTML=`<div class="empty-state">${strengthMode==="history"?"Todavía no hay sesiones funcionales completadas. Cuando marques una, aparecerá aquí.":"¡Semana completada! Elige otra semana en el selector para consultar el plan."}</div>`;
+ const selected=weekSelect.value;
+ selectedStrengthWeek=selected==="all"?"all":Number(selected);
+ const visibleWeeks=strengthWeeks.filter(w=>(selected==="all"||w.week===Number(selected)) && (strengthMode==="history"?w.sessions.some(sess=>logs[sess.id]?.done):w.sessions.some(sess=>!logs[sess.id]?.done)));
+ if(!visibleWeeks.length){
+   root.innerHTML=`<div class="empty-state">${strengthMode==="history"?"Todavía no hay sesiones funcionales completadas. Cuando marques una, aparecerá aquí.":"No quedan sesiones pendientes en esta selección. Elige otra semana o consulta las completadas."}</div>`;
    return;
  }
- root.innerHTML=weeksToShow.map(w=>{
+ root.innerHTML=visibleWeeks.map(w=>{
    const sessions=w.sessions.filter(sess=>strengthMode==="history"?!!logs[sess.id]?.done:!logs[sess.id]?.done);
    return `<section class="functional-week"><div class="week-bucket-head"><div><div class="eyebrow">${w.phase}</div><h3 style="margin-top:4px">Semana ${w.week}</h3><p>${w.recovery?'Descarga y recuperación':w.taper?'Mantener frescura':'Fuerza útil para correr'} · ${w.sessions.filter(x=>logs[x.id]?.done).length}/2 completadas</p></div><div class="week-total"><strong>${w.sessions.filter(x=>logs[x.id]?.done).length}/2</strong><span>Completadas</span></div></div><div class="functional-session-grid">${sessions.map(sess=>{const completed=!!logs[sess.id]?.done;return `<article class="functional-card ${completed?'done':''}"><div class="functional-card-head"><div><div class="meta">SESIÓN ${sess.letter} · ${sess.minutes}</div><h3 style="margin-top:4px">${sess.title}</h3></div><span class="tag ${completed?'completed':''}">${completed?'Completada':sess.recovery?'Descarga':sess.taper?'Activación':'Funcional'}</span></div><div class="exercise-list">${sess.keys.map(ex=>`<div class="exercise"><div class="exercise-art">${exerciseArt(ex.art)}</div><div><h4>${ex.name}</h4><p>${ex.cue}</p><div class="dose">${ex.dose} · descanso 45–75 s</div></div></div>`).join('')}</div><div class="functional-note"><b>Objetivo:</b> ${sess.note}<br><b>Intensidad:</b> RPE 5–7/10 · técnica limpia, sin llegar al fallo.</div><button class="btn ${completed?'secondary':''}" data-strength="${sess.id}">${completed?'Deshacer completado':'Marcar completada'}</button></article>`}).join('')}</div></section>`;
  }).join('');
@@ -411,13 +407,7 @@ function renderFunctional(){
    state.functionalLogs[id].done=!state.functionalLogs[id].done;
    state.functionalLogs[id].date=state.functionalLogs[id].done?new Date().toISOString().slice(0,10):null;
    saveState();
-   if(strengthMode==="active"){
-     const current=strengthWeeks.find(w=>w.week===selectedStrengthWeek);
-     if(current && current.sessions.every(sess=>state.functionalLogs[sess.id]?.done)){
-       const next=strengthWeeks.find(w=>w.sessions.some(sess=>!state.functionalLogs[sess.id]?.done));
-       if(next){selectedStrengthWeek=next.week;document.getElementById("strengthWeek").value=next.week;}
-     }
-   }
+   // Keep the selected week stable; history/active tabs show the matching records in that week or all weeks.
    renderFunctional();
  }));
 }
@@ -425,32 +415,40 @@ function renderFunctional(){
 function setupWeekControls(){
  const runningSelect=document.getElementById("runningWeek");
  const strengthSelect=document.getElementById("strengthWeek");
- runningSelect.innerHTML=[...new Set(plan.map(p=>p.week))].map(w=>`<option value="${w}">Semana ${w}</option>`).join("");
+ const allWeeks=[...new Set(plan.map(p=>p.week))];
+ runningSelect.innerHTML='<option value="all">Todas</option>'+allWeeks.map(w=>`<option value="${w}">Semana ${w}</option>`).join('');
  const nextRun=plan.findIndex((p,i)=>!state.logs[i]);
  selectedRunningWeek=nextRun<0?20:plan[nextRun].week;
- runningSelect.value=selectedRunningWeek;
- runningSelect.addEventListener("change",()=>{selectedRunningWeek=+runningSelect.value;render();});
+ runningSelect.value=String(selectedRunningWeek);
+ runningSelect.addEventListener("change",()=>{selectedRunningWeek=runningSelect.value==="all"?"all":Number(runningSelect.value);render();});
  document.querySelectorAll("[data-running-mode]").forEach(btn=>btn.addEventListener("click",()=>{
    runningMode=btn.dataset.runningMode;
-   activeFilter="all";
-   document.querySelectorAll(".filter").forEach(f=>f.classList.toggle("active",f.dataset.filter==="all"));
    document.querySelectorAll("[data-running-mode]").forEach(b=>b.classList.toggle("active",b===btn));
+   if(runningMode==="history") runningSelect.value="all";
+   else {
+     const next=plan.findIndex((p,i)=>!state.logs[i]);
+     selectedRunningWeek=next<0?20:plan[next].week;
+     runningSelect.value=String(selectedRunningWeek);
+   }
    render();
  }));
- strengthSelect.innerHTML=strengthWeeks.map(w=>`<option value="${w.week}">Semana ${w.week}</option>`).join("");
+ strengthSelect.innerHTML='<option value="all">Todas</option>'+strengthWeeks.map(w=>`<option value="${w.week}">Semana ${w.week}</option>`).join('');
  selectedStrengthWeek=strengthWeeks.find(w=>w.sessions.some(sess=>!state.functionalLogs?.[sess.id]?.done))?.week||20;
- strengthSelect.value=selectedStrengthWeek;
- strengthSelect.addEventListener("change",()=>{selectedStrengthWeek=+strengthSelect.value;renderFunctional();});
+ strengthSelect.value=String(selectedStrengthWeek);
+ strengthSelect.addEventListener("change",()=>{selectedStrengthWeek=strengthSelect.value==="all"?"all":Number(strengthSelect.value);renderFunctional();});
  document.querySelectorAll("[data-strength-mode]").forEach(btn=>btn.addEventListener("click",()=>{
    strengthMode=btn.dataset.strengthMode;
    document.querySelectorAll("[data-strength-mode]").forEach(b=>b.classList.toggle("active",b===btn));
-   if(strengthMode==="active"){
+   if(strengthMode==="history") strengthSelect.value="all";
+   else {
      const next=strengthWeeks.find(w=>w.sessions.some(sess=>!state.functionalLogs?.[sess.id]?.done));
-     if(next){selectedStrengthWeek=next.week;strengthSelect.value=next.week;}
+     selectedStrengthWeek=next?next.week:20;
+     strengthSelect.value=String(selectedStrengthWeek);
    }
    renderFunctional();
  }));
 }
+
 document.querySelectorAll(".view-tab").forEach(btn=>btn.addEventListener("click",()=>{
  document.querySelectorAll(".view-tab").forEach(b=>b.classList.toggle("active",b===btn));
  const view=btn.dataset.view;
@@ -473,8 +471,8 @@ function render(){
  document.getElementById("nextText").textContent=next<0?"¡Plan completado! Revisa tu progreso y prepara el siguiente bloque.":`Siguiente: semana ${plan[next].week} · ${plan[next].title} · ${plan[next].km} km`;
  const filter=activeFilter;
  const root=document.getElementById("workouts");root.innerHTML="";
- const chosenWeek=+(document.getElementById("runningWeek")?.value||selectedRunningWeek||1);
- const weeks=[...new Set(plan.map(p=>p.week))].filter(week=>week===chosenWeek);
+ const weekValue=document.getElementById("runningWeek")?.value||String(selectedRunningWeek||1);
+ const weeks=[...new Set(plan.map(p=>p.week))].filter(week=>weekValue==="all"||week===Number(weekValue));
  weeks.forEach(week=>{
    const indices=plan.map((p,i)=>({p,i})).filter(x=>x.p.week===week && (runningMode==="history"?!!state.logs[x.i]:!state.logs[x.i]));
    if(!indices.length)return;
